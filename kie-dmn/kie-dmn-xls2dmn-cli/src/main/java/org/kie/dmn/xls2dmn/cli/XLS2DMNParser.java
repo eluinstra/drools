@@ -103,24 +103,9 @@ public class XLS2DMNParser implements DecisionTableParser {
 
     public void parseWorkbook(String dmnModelName, Workbook workbook) {
         Map<String, List<String>> overview = new HashMap<>();
-        DataFormatter formatter = new DataFormatter();
         for (int s = 0; s < workbook.getNumberOfSheets(); s++) {
-            Sheet sheet = workbook.getSheetAt(s);
-            int maxRows = sheet.getLastRowNum();
-
-            for (int i = 0; i <= maxRows; i++) {
-                Row row = sheet.getRow(i);
-                int lastCellNum = row != null ? row.getLastCellNum() : 0;
-                if (lastCellNum == 0) {
-                    continue; // skip empty row.
-                }
-                List<String> header = new ArrayList<>();
-                for (Cell c : row) {
-                    String text = formatter.formatCellValue(c);
-                    header.add(text);
-                }
-                overview.put(sheet.getSheetName(), header);
-                break; // header found.
+            if (mustParse(workbook.getSheetAt(s))) {
+                parseHeader(workbook.getSheetAt(s), overview);
             }
         }
         overview.entrySet().forEach(e -> LOG.debug("{}", e));
@@ -156,6 +141,23 @@ public class XLS2DMNParser implements DecisionTableParser {
         }
         LOG.debug("output XML can be displayed at trace level",xml);
         LOG.trace("output XML:\n{}",xml);
+    }
+
+    private boolean mustParse(Sheet sheet) {
+        Row row = sheet.getRow(0);
+        int lastCellNum = row != null ? row.getLastCellNum() : 0;
+        return lastCellNum > 0 && row.getCell(0).getStringCellValue().equals("DMN");
+    }
+
+    private void parseHeader(Sheet sheet, Map<String, List<String>> overview) {
+        DataFormatter formatter = new DataFormatter();
+        Row row = sheet.getRow(4);
+        List<String> header = new ArrayList<>();
+        for (Cell c : row) {
+            String text = formatter.formatCellValue(c);
+            header.add(text);
+        }
+        overview.put(sheet.getSheetName(), header);
     }
 
     private void appendDecisionDT(Definitions definitions, Map<String, DTHeaderInfo> headerInfos) {

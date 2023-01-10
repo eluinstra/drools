@@ -62,7 +62,7 @@ public class DTSheetListener implements DataListener {
 
     @Override
     public void newRow(int rowNumber, int columns) {
-        if (rowNumber == 0) {
+        if (rowNumber < 5) {
             return; // TODO row 0 being the header.
         }
         if (columns == -1) {
@@ -78,7 +78,7 @@ public class DTSheetListener implements DataListener {
 
     @Override
     public void newCell(int row, int column, String value, int mergedColStart) {
-        if (row == 0) {
+        if (row < 5) {
             return; // TODO row 0 being the header.
         }
         if (curRule == null) {
