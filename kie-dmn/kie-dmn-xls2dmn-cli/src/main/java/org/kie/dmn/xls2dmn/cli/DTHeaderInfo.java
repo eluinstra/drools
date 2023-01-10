@@ -20,16 +20,20 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import org.kie.dmn.model.api.HitPolicy;
+
 public class DTHeaderInfo {
 
     private final String sheetName;
+    private final HitPolicy hitPolicy;
     private final List<String> original;
     private final int hIndex;
     private final Collection<String> requiredInput;
     private final Collection<String> requiredDecision;
 
-    public DTHeaderInfo(String sheetName, List<String> original, int hIndex, List<String> requiredInput, List<String> requiredDecision) {
+    public DTHeaderInfo(String sheetName, HitPolicy hitPolicy, List<String> original, int hIndex, List<String> requiredInput, List<String> requiredDecision) {
         this.sheetName = sheetName;
+        this.hitPolicy = hitPolicy;
         this.original = new ArrayList<>(original);
         this.hIndex = hIndex;
         this.requiredInput = new ArrayList<>(requiredInput);
@@ -43,6 +47,10 @@ public class DTHeaderInfo {
 
     public String getSheetName() {
         return sheetName;
+    }
+
+    public HitPolicy getHitPolicy() {
+      return hitPolicy;
     }
 
     public List<String> getOriginal() {

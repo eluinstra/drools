@@ -43,6 +43,7 @@ import org.drools.decisiontable.parser.DecisionTableParser;
 import org.drools.decisiontable.parser.xls.ExcelParser;
 import org.drools.template.parser.DataListener;
 import org.drools.template.parser.DecisionTableParseException;
+import org.drools.util.StringUtils;
 import org.kie.dmn.api.marshalling.DMNMarshaller;
 import org.kie.dmn.backend.marshalling.v1x.DMNMarshallerFactory;
 import org.kie.dmn.feel.codegen.feel11.CodegenStringUtil;
@@ -102,7 +103,7 @@ public class XLS2DMNParser implements DecisionTableParser {
     }
 
     public void parseWorkbook(String dmnModelName, Workbook workbook) {
-        Map<String, List<String>> overview = new HashMap<>();
+        Map<String, SheetInfo> overview = new HashMap<>();
         for (int s = 0; s < workbook.getNumberOfSheets(); s++) {
             if (mustParse(workbook.getSheetAt(s))) {
                 parseHeader(workbook.getSheetAt(s), overview);
@@ -149,7 +150,38 @@ public class XLS2DMNParser implements DecisionTableParser {
         return lastCellNum > 0 && row.getCell(0).getStringCellValue().equals("DMN");
     }
 
-    private void parseHeader(Sheet sheet, Map<String, List<String>> overview) {
+    private void parseHeader(Sheet sheet, Map<String, SheetInfo> overview) {
+        HitPolicy hitPolicy = parseHitPolicy(sheet);
+        List<String> header = parseHeader(sheet);
+        SheetInfo sheetInfo = new SheetInfo(hitPolicy, header);
+        overview.put(sheet.getSheetName(), sheetInfo);
+    }
+
+    private HitPolicy parseHitPolicy(Sheet sheet) {
+        Row row = sheet.getRow(1);
+        if (row.getCell(0).getStringCellValue().equals("HitPolicy")) {
+            return toHitPolicy(row.getCell(1).getStringCellValue());
+        } else {
+            throw new XLS2DMNException("No HitPolicy found at line 2");
+        }
+    }
+
+    private HitPolicy toHitPolicy(String hitPolicy) {
+        if (StringUtils.isEmpty(hitPolicy))
+            throw new XLS2DMNException("HitPolicy not defined");
+        switch (hitPolicy) {
+            case "A": return HitPolicy.ANY;
+            case "C": return HitPolicy.COLLECT;
+            case "F": return HitPolicy.FIRST;
+            case "O": return HitPolicy.OUTPUT_ORDER;
+            case "P": return HitPolicy.PRIORITY;
+            case "R": return HitPolicy.RULE_ORDER;
+            case "U": return HitPolicy.UNIQUE;
+            default: throw new XLS2DMNException("HitPolicy " + hitPolicy + " unknown");
+        }
+    }
+
+    private List<String> parseHeader(Sheet sheet) {
         DataFormatter formatter = new DataFormatter();
         Row row = sheet.getRow(4);
         List<String> header = new ArrayList<>();
@@ -157,7 +189,7 @@ public class XLS2DMNParser implements DecisionTableParser {
             String text = formatter.formatCellValue(c);
             header.add(text);
         }
-        overview.put(sheet.getSheetName(), header);
+        return header;
     }
 
     private void appendDecisionDT(Definitions definitions, Map<String, DTHeaderInfo> headerInfos) {
@@ -187,7 +219,7 @@ public class XLS2DMNParser implements DecisionTableParser {
             DecisionTable dt = new TDecisionTable();
             dt.setOutputLabel(hi.getSheetName());
             dt.setId("ddt_" + CodegenStringUtil.escapeIdentifier(hi.getSheetName()));
-            dt.setHitPolicy(HitPolicy.ANY);
+            dt.setHitPolicy(hi.getHitPolicy());
             for (String req : hi.getOriginal().subList(0, hi.gethIndex())) {
                 InputClause ic = new TInputClause();
                 ic.setLabel(req);
@@ -232,33 +264,34 @@ public class XLS2DMNParser implements DecisionTableParser {
         }
     }
 
-    private Map<String, DTHeaderInfo> generateDTHeaderInfo(Map<String, List<String>> overview) {
+    private Map<String, DTHeaderInfo> generateDTHeaderInfo(Map<String, SheetInfo> overview) {
         Map<String, DTHeaderInfo> result = new HashMap<>();
-        for (Entry<String, List<String>> kv : overview.entrySet()) {
+        for (Entry<String, SheetInfo> kv : overview.entrySet()) {
             String sheetName = kv.getKey();
             List<String> requiredInput = new ArrayList<>();
             List<String> requiredDecision = new ArrayList<>();
-            int hIndex = kv.getValue().indexOf(sheetName);
+            List<String> headers = kv.getValue().getHeaders();
+            int hIndex = headers.indexOf(sheetName);
             if (hIndex < 0) {
                 throw new XLS2DMNException("There is no result output column in sheet: " + sheetName);
             }
-            if (hIndex != kv.getValue().size()) {
-                for (int i = hIndex+1; i < kv.getValue().size(); i++) {
-                    String afterIndexValue = kv.getValue().get(i);
+            if (hIndex != headers.size()) {
+                for (int i = hIndex+1; i < headers.size(); i++) {
+                    String afterIndexValue = headers.get(i);
                     if (!(afterIndexValue == null || afterIndexValue.isEmpty())) {
                         throw new XLS2DMNException("Decision name was not last, on the right I found " + afterIndexValue);
                     }
                 }
             }
             for (int i = 0; i < hIndex; i++) {
-                String hValue = kv.getValue().get(i);
+                String hValue = headers.get(i);
                 if (overview.containsKey(hValue)) {
                     requiredDecision.add(hValue);
                 } else {
                     requiredInput.add(hValue);
                 }
             }
-            DTHeaderInfo info = new DTHeaderInfo(sheetName, kv.getValue(), hIndex, requiredInput, requiredDecision);
+            DTHeaderInfo info = new DTHeaderInfo(sheetName, kv.getValue().getHitPolicy(), kv.getValue().getHeaders(), hIndex, requiredInput, requiredDecision);
             result.put(sheetName, info);
         }
         return result;
